@@ -61,7 +61,7 @@ def train(args):
         """Load parameters from checkpoint"""
         ckpt_path=f'./output/{args.model}/{args.expname}/{timestamp}/models/model_epo{epoch}.pkl'
         print(f'Loading model parameters from {ckpt_path}')
-        model.load_state_dict(torch.load(checkpoint))
+        model.load_state_dict(torch.load(ckpt_path))
 
     config = getattr(configs, 'config_'+args.model)()
 
@@ -101,7 +101,7 @@ def train(args):
     ###############################################################################
     logger.info("Training...")
     itr_global=1
-    start_epoch=1 if args.reload_from==-1 else args.reload_from+1
+    start_epoch=1
     for epoch in range(start_epoch, config['epochs']+1):
 
         epoch_start_time = time.time()
@@ -110,6 +110,10 @@ def train(args):
         # shuffle (re-define) data between epochs   
 
         for batch in train_loader:# loop through all batches in training data
+            if args.reload_from != -1 and itr_global <= args.reload_from:
+                itr_global += 1
+                continue
+
             model.train()
             batch_gpu = [tensor.to(device) for tensor in batch]
             loss = model(*batch_gpu)  
@@ -130,12 +134,22 @@ def train(args):
 
                 itr_start_time = time.time()   
 
+            if itr_global % 1000 == 0:
+                model.eval()
+                save_model(model, itr_global, timestamp)
+
             if itr_global % args.valid_every == 0:
              
                 model.eval()
                 loss_records={}
 
+                logger.info("Validating...")
+                i_valid = 0
+
                 for batch in valid_loader:
+                    if i_valid >= 10000:
+                        break
+                    i_valid += 1
                     batch_gpu = [tensor.to(device) for tensor in batch]
                     with torch.no_grad():
                         valid_loss = model.valid(*batch_gpu)    
@@ -175,6 +189,9 @@ def train(args):
 
         # end of epoch ----------------------------
         model.adjust_lr()
+
+    model.eval()
+    save_model(model, itr_global, timestamp)
     
 if __name__ == '__main__':
     

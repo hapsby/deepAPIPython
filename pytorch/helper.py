@@ -61,8 +61,9 @@ def indexes2sent(indexes, vocab, ignore_tok=PAD_ID):
         length=0
         indexes=filter(lambda i: i!=ignore_tok, indexes)
         for idx in indexes:
-            toks.append(ivocab[idx])
-            length+=1
+            if idx in ivocab:
+                toks.append(ivocab[idx])
+                length+=1
             if idx == EOS_ID: break
         return ' '.join(toks), length
     

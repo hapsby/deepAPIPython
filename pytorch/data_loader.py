@@ -16,7 +16,7 @@ class APIDataset(data.Dataset):
     """
     Dataset that has binary samples.
     """
-    def __init__(self, desc_file, api_file, max_seq_len=50):
+    def __init__(self, desc_file, api_file, max_seq_len=30):
         # 1. Initialize file path or list of file names.
         """read training sentences(list of int array) from a hdf5 file"""
         self.max_seq_len=max_seq_len
@@ -41,26 +41,45 @@ class APIDataset(data.Dataset):
         return arr
     
     def __getitem__(self, offset):
-        pos, api_len = self.api_index[offset]['pos'], self.api_index[offset]['length']
+        pos, api_len = self.get_pos_and_len(self.api_index, offset)
+        api = self.api_data[pos: pos + api_len].tolist()
+        api = self.filter_high_indices(api)
         api_len = min(int(api_len),self.max_seq_len-2) # real length of sequences
-        api = [SOS_ID] + self.api_data[pos: pos + api_len].tolist() + [EOS_ID]
-        
-        pos, desc_len = self.desc_index[offset]['pos'], self.desc_index[offset]['length']
+        api = [SOS_ID] + api[0: api_len] + [EOS_ID]
+
+        pos, desc_len = self.get_pos_and_len(self.desc_index, offset)
+        desc = self.desc_data[pos: pos+ desc_len].tolist()
+        desc = self.filter_high_indices(desc)
         desc_len=min(int(desc_len),self.max_seq_len-2) # get real seq len
-        desc= [SOS_ID] + self.desc_data[pos: pos+ desc_len].tolist() + [EOS_ID]
-       
+        desc= [SOS_ID] + desc[0: desc_len] + [EOS_ID]
+
         ## Padding ##
-        api = self.list2array(api, self.max_seq_len, np.long, PAD_ID)
-        desc= self.list2array(desc, self.max_seq_len, np.long, PAD_ID)
+        api = self.list2array(api, self.max_seq_len, np.int, PAD_ID)
+        desc= self.list2array(desc, self.max_seq_len, np.int, PAD_ID)
         
         return desc, desc_len, api, api_len
 
     def __len__(self):
         return self.data_len
-    
-    
+
+    def filter_high_indices(self, indices):
+        new_indices = []
+        for index in indices:
+            if index < 30000:
+                new_indices.append(index)
+        return new_indices
+
+    def get_pos_and_len(self, index, offset):
+        if offset == 0:
+            return 0, index[0]
+        pos = index[offset - 1]
+        return pos, index[offset] - pos
+
+
 def load_dict(filename):
-    return json.loads(open(filename, "r", encoding="utf-8").readline())
+    arr = json.loads(open(filename, "r", encoding="utf-8").readline())
+    return {v: k for k, v in enumerate(arr)}
+
 
 def load_vecs(fin):         
     """read vectors (2D numpy array) from a hdf5 file"""
